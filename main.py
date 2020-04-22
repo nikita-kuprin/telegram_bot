@@ -1,34 +1,54 @@
 # coding=utf-8
 # Импортируем необходимые классы.
+from flask_login import LoginManager
 from telegram.ext import Updater, MessageHandler, Filters
 from telegram.ext import CallbackContext, CommandHandler, ConversationHandler
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 import requests
 import time
-import re
+from werkzeug.security import generate_password_hash, check_password_hash
+from data import db_session
+from data.users import User
 
-reply_keyboard = [['/address', '/phone'],
-                  ['/site', '/bop']]
-markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=False)
+db_session.global_init("db/blogs.sqlite")
+login_manager = LoginManager()
+user = User()
 
 
-# начало диалога с пользователем
-def start(update, context):
-    update.message.reply_text(
-        "Привет! Я бот. Давайте познакомимся поближе. Для этого пройдите следующую анкету:")
+def set_password(self, password):
+    self.hashed_password = generate_password_hash(password)
+
+
+def age_verification(age):
+    try:
+        int(age)
+        return False
+    except ValueError:
+        return True
+
+
+def registration(update, context):
+    update.message.reply_text("Какое у Вас имя?")
     return 1
 
 
-# когда для описания функций бота
+reply_keyboard = [['/registration']]
+markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
+
+
+def start(update, context):
+    update.message.reply_text("Привет! Я бот. Давайте познакомимся поближе. Для этого пройдите анкету",
+                              reply_keyboard=markup)
+
+
 def help(update, context):
     update.message.reply_text(
         "Мои команды:")
     update.message.reply_text(
         "1) /bop - случайное фото собачки всегда поднимет настроение :3")
-    time.sleep(1000)
-    update.message.reply_text("2) /set <время> - поставить таймер на любое количество секунд,"
-                              " чтобы удалить таймер - напиши мне /unset")
-    time.sleep(1000)
+    update.message.reply_text(
+        "2) /set <время> - поставить таймер на любое количество секунд,"
+        " чтобы удалить таймер - напиши мне /unset")
 
 
 def stop(update, context):
@@ -36,28 +56,42 @@ def stop(update, context):
         "Анкетирование приостановлено. Для возобновления напиши мне /continue")
 
 
-# Анкета представляет собой серию вопросов;
-# каждый ответ пользователя сохраняется в базе и может использоваться в других функциях
 def first_answer(update, context):
-    update.message.reply_text("Какое у Вас имя?")
     name = update.message.text
-    print(name)
+    user.name = name
     update.message.reply_text("Какое красивое имя!")
+    update.message.reply_text("А где Вы живёте?🏙")
     return 2
 
 
 def second_answer(update, context):
-    update.message.reply_text("А где Вы живёте?🏙")
     city = update.message.text
-    print city
+    user.city = city
+    update.message.reply_text("Сколько Вам лет?")
     return 3
 
 
 def third_answer(update, context):
-    pass
+    age = update.message.text
+    flag = age_verification(age)
+    if flag:
+        return 3
+    user.age = age
+    update.message.reply_text("Придумайте пароль")
+    return 4
 
 
-# поправить потом
+def fourth_answer(update, context):
+    password = update.message.text
+    user.password = generate_password_hash(password)
+    user.status = "normal"
+    update.message.reply_text("Ваши данные сохранены!")
+    session = db_session.create_session()
+    session.add(user)
+    session.commit()
+    return ConversationHandler.END
+
+
 def get_url():
     contents = requests.get('https://random.dog/woof.json').json()
     url = contents['url']
@@ -76,8 +110,9 @@ def close_keyboard(update, context):
         reply_markup=ReplyKeyboardRemove()
     )
 
+    # Обычный обработчик, как и те, которыми мы пользовались раньше.
 
-# Обычный обработчик, как и те, которыми мы пользовались раньше.
+
 def set_timer(update, context):
     """Добавляем задачу в очередь"""
     chat_id = update.message.chat_id
@@ -139,7 +174,6 @@ def main():
 
     # Получаем из него диспетчер сообщений.
     dp = updater.dispatcher
-
     # Запускаем цикл приема и обработки сообщений.
     updater.start_polling()
     conv_handler = ConversationHandler(
@@ -154,16 +188,18 @@ def main():
             1: [MessageHandler(Filters.text, first_answer)],
             # Функция читает ответ на второй вопрос и продолжает беседу.
             2: [MessageHandler(Filters.text, second_answer)],
-            3: [MessageHandler(Filters.text, third_answer)]
+            3: [MessageHandler(Filters.text, third_answer)],
+            4: [MessageHandler(Filters.text, fourth_answer)]
         },
-
         # Точка прерывания диалога. В данном случае — команда /stop.
         fallbacks=[CommandHandler('stop', stop)]
     )
+
     dp.add_handler(conv_handler)
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help))
     dp.add_handler(CommandHandler('bop', bop))
+    dp.add_handler(CommandHandler('registration', registration))
     dp.add_handler(CommandHandler("close", close_keyboard))
     dp.add_handler(CommandHandler("set", set_timer,
                                   pass_args=True,
@@ -171,7 +207,7 @@ def main():
                                   pass_chat_data=True))
     dp.add_handler(CommandHandler("unset", unset_timer,
                                   pass_chat_data=True))
-    # Ждём завершения приложения. 
+    # Ждём завершения приложения.
     # (например, получения сигнала SIG_TERM при нажатии клавиш Ctrl+C)
     updater.idle()
 
