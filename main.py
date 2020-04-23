@@ -5,7 +5,7 @@ from telegram.ext import Updater, MessageHandler, Filters
 from telegram.ext import CallbackContext, CommandHandler, ConversationHandler
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 import requests
-import time
+import pyowm
 from werkzeug.security import generate_password_hash, check_password_hash
 from data import db_session
 from data.users import User
@@ -49,6 +49,10 @@ def help(update, context):
     update.message.reply_text(
         "2) /set <время> - поставить таймер на любое количество секунд,"
         " чтобы удалить таймер - напиши мне /unset")
+    update.message.reply_text(
+        "3) /geocoder <название города> - показать карту местности города")
+    update.message.reply_text(
+        "4) /weather <название города транслитом> - показать погоду")
 
 
 def stop(update, context):
@@ -157,6 +161,90 @@ def unset_timer(update, context):
     update.message.reply_text('Хорошо, вернулся сейчас!')
 
 
+def get_ll(city):
+    geocoder_uri = "http://geocode-maps.yandex.ru/1.x/"
+    response = requests.get(geocoder_uri, params={
+        "apikey": "40d1649f-0493-4b70-98ba-98533de7710b",
+        "format": "json",
+        "geocode": city
+    })
+    toponym = response.json()["response"]["GeoObjectCollection"][
+        "featureMember"][0]["GeoObject"]
+    return toponym["Point"]["pos"].split()
+
+
+def geocoder(update, context):
+    city = update.message.text[9:]
+    ll = get_ll(city)
+    # Можно воспользоваться готовой функцией,
+    # которую предлагалось сделать на уроках, посвящённых HTTP-геокодеру.
+
+    static_api_request = f"http://static-maps.yandex.ru/1.x/?ll={ll[0]},{ll[1]}&spn=0.5,0.5&l=map"
+    context.bot.send_photo(
+        update.message.chat_id,  # Идентификатор чата. Куда посылать картинку.
+        # Ссылка на static API, по сути, ссылка на картинку.
+        # Телеграму можно передать прямо её, не скачивая предварительно карту.
+        static_api_request,
+        caption=f"Нашёл: {city}"
+    )
+
+
+def weather(update, context):
+    try:
+        city = update.message.text[8:]
+        update.message.reply_text(f'Ищу погоду в городе {city}')
+        params = {
+            'q': city,
+            'units': 'metric',
+            'lang': 'ru',
+            'APPID': 'dc3fe5fca29d8fd2decc5bc2118aeab4'
+        }
+        res = requests.get("http://api.openweathermap.org/data/2.5/find", params)
+        data = res.json()
+        city_id = data['list'][0]['id']
+        new_params = {
+            'id': city_id,
+            'units': 'metric',
+            'lang': 'ru',
+            'APPID': 'dc3fe5fca29d8fd2decc5bc2118aeab4'
+        }
+        response = requests.get("http://api.openweathermap.org/data/2.5/weather", new_params)
+        toponym = response.json()
+        print(toponym)
+        update.message.reply_text(f"Погода в городе {city}:")
+        update.message.reply_text('Описание: {}'.format(toponym['weather'][0]['description']))
+        update.message.reply_text('Температура: {}'.format(toponym['main']['temp']))
+        update.message.reply_text('Максимальная температура: {}'.format(toponym['main']['temp_max']))
+        update.message.reply_text('Минимальная температура: {}'.format(toponym['main']['temp_min']))
+    except BaseException as e:
+        print(e)
+        update.message.reply_text("Неизвестная ошибка! Проверьте написание города!")
+
+
+def weather_5(update, context):
+    city = update.message.text[9:]
+    update.message.reply_text(f'Ищу погоду в городе {city}')
+    params = {
+        'q': city,
+        'units': 'metric',
+        'lang': 'ru',
+        'APPID': 'dc3fe5fca29d8fd2decc5bc2118aeab4'
+    }
+    res = requests.get("http://api.openweathermap.org/data/2.5/find", params)
+    data = res.json()
+    city_id = data['list'][0]['id']
+    new_params = {
+        'id': city_id,
+        'units': 'metric',
+        'lang': 'ru',
+        'APPID': 'dc3fe5fca29d8fd2decc5bc2118aeab4'
+    }
+    response = requests.get("http://api.openweathermap.org/data/2.5/forecast", new_params)
+    toponym = response.json()
+    for i in toponym['list']:
+        update.message.reply_text(i['dt_txt'], '{0:+3.0f}'.format(i['main']['temp']), i['weather'][0]['description'])
+
+
 def main():
     REQUEST_KWARGS = {
         'proxy_url': 'socks5://96.96.33.133:1080',  # Адрес прокси сервера
@@ -201,6 +289,9 @@ def main():
     dp.add_handler(CommandHandler('bop', bop))
     dp.add_handler(CommandHandler('registration', registration))
     dp.add_handler(CommandHandler("close", close_keyboard))
+    dp.add_handler(CommandHandler("geocoder", geocoder))
+    dp.add_handler(CommandHandler("weather", weather))
+    dp.add_handler(CommandHandler("weather2", weather_5))
     dp.add_handler(CommandHandler("set", set_timer,
                                   pass_args=True,
                                   pass_job_queue=True,
