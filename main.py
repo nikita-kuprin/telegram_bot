@@ -1,83 +1,110 @@
 # coding=utf-8
 # Импортируем необходимые классы.
-from flask_login import LoginManager
 from telegram.ext import Updater, MessageHandler, Filters
 from telegram.ext import CallbackContext, CommandHandler, ConversationHandler
-from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
+
+# Импортируем необходимую библиотеку для работы с API
 import requests
-import pyowm
-from werkzeug.security import generate_password_hash, check_password_hash
+
+# Импортируем необходимую библиотеку для создания хешированного пароля
+from werkzeug.security import generate_password_hash
+
+# Импортируем все необходимое для работы с базой данной
 from data import db_session
 from data.users import User
 
+# Инициализация базы данных
 db_session.global_init("db/blogs.sqlite")
-login_manager = LoginManager()
+
+# Создаем пользователя для регистрации и дальнейшего отправления его в базу данных
 user = User()
 
 
+# Функция для установки хешированного пароля
 def set_password(self, password):
     self.hashed_password = generate_password_hash(password)
 
 
-def age_verification(age):
+# Функция для проверки возраста, введенного пользователем
+def age_verification(update, age):
     try:
         int(age)
         return False
+
     except ValueError:
+        update.message.reply_text("Введите целое число!")
         return True
 
 
+# начало регистрации пользователя
 def registration(update, context):
     update.message.reply_text("Какое у Вас имя?")
     return 1
+    # Следующее текстовое сообщение будет обработано
+    # обработчиком states[1]
 
 
-reply_keyboard = [['/registration']]
-markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
-
-
+# Команда для начала общения с ботом
 def start(update, context):
+    reply_keyboard = [["/registration"]]
+    markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
     update.message.reply_text("Привет! Я бот. Давайте познакомимся поближе. Для этого пройдите анкету",
-                              reply_keyboard=markup)
+                              reply_markup=markup)
 
 
+# Команда для получения команд бота
 def help(update, context):
     update.message.reply_text(
         "Мои команды:")
     update.message.reply_text(
-        "1) /bop - случайное фото собачки всегда поднимет настроение :3")
+        "1) /dog_photo - случайное фото собачки всегда поднимет настроение :3")
     update.message.reply_text(
         "2) /set <время> - поставить таймер на любое количество секунд,"
         " чтобы удалить таймер - напиши мне /unset")
     update.message.reply_text(
         "3) /geocoder <название города> - показать карту местности города")
     update.message.reply_text(
-        "4) /weather <название города транслитом> - показать погоду")
+        "4) /weather <название города транслитом> - показать погоду в вашем городе")
 
 
 def stop(update, context):
     update.message.reply_text(
-        "Анкетирование приостановлено. Для возобновления напиши мне /continue")
+        "Анкетирование приостановлено. Данные не сохранены."
+    )
+    update.message.reply_text(
+        " Для новой регистрации отправьте мне /registration."
+    )
 
 
+# Первый вопрос для регистрации (имя)
 def first_answer(update, context):
+    # Это ответ на первый вопрос.
     name = update.message.text
     user.name = name
     update.message.reply_text("Какое красивое имя!")
     update.message.reply_text("А где Вы живёте?🏙")
     return 2
+    # Следующее текстовое сообщение будет обработано
+    # обработчиком states[2]
 
 
+# Второй вопрос для регистрации (город)
 def second_answer(update, context):
+    # Это ответ на второй вопрос.
     city = update.message.text
     user.city = city
     update.message.reply_text("Сколько Вам лет?")
     return 3
+    # Следующее текстовое сообщение будет обработано
+    # обработчиком states[3]
 
 
+# Третий вопрос для регистрации (возраст)
 def third_answer(update, context):
+    # Это ответ на третий вопрос.
     age = update.message.text
-    flag = age_verification(age)
+    flag = age_verification(update, age)
     if flag:
         return 3
     user.age = age
@@ -85,27 +112,34 @@ def third_answer(update, context):
     return 4
 
 
+# Четвертый вопрос для регистрации (пароль)
 def fourth_answer(update, context):
+    # Это ответ на четвертый вопрос.
     password = update.message.text
+    # хэширование пароля
     user.password = generate_password_hash(password)
+    # ставим статус пользователю
     user.status = "normal"
     update.message.reply_text("Ваши данные сохранены!")
+    # подключаемся к базе данных
     session = db_session.create_session()
     session.add(user)
     session.commit()
-    return ConversationHandler.END
+    return ConversationHandler.END  # Константа, означающая конец диалога.
+    # Все обработчики из states и fallbacks становятся неактивными.
 
 
-def get_url():
-    contents = requests.get('https://random.dog/woof.json').json()
-    url = contents['url']
-    return url
-
-
-def bop(update, context):
-    url = get_url()
+# функция для команды /bop
+def dog_photo(update, context):
+    # формируем запрос
+    responce = requests.get('https://random.dog/woof.json')
+    # в формате json
+    toponym = responce.json()
+    # получаем ссылку на картинку
+    photo = toponym["url"]
+    # отсылаем пользователю фотографию
     chat_id = update.message.chat_id
-    context.bot.send_photo(chat_id=chat_id, photo=url)
+    context.bot.send_photo(chat_id=chat_id, photo=photo)
 
 
 def close_keyboard(update, context):
@@ -113,8 +147,6 @@ def close_keyboard(update, context):
         "Ok",
         reply_markup=ReplyKeyboardRemove()
     )
-
-    # Обычный обработчик, как и те, которыми мы пользовались раньше.
 
 
 def set_timer(update, context):
@@ -161,24 +193,32 @@ def unset_timer(update, context):
     update.message.reply_text('Хорошо, вернулся сейчас!')
 
 
+# функция для получения координат места(города)
 def get_ll(city):
-    geocoder_uri = "http://geocode-maps.yandex.ru/1.x/"
-    response = requests.get(geocoder_uri, params={
+    geocoder_url = "http://geocode-maps.yandex.ru/1.x/"
+    # формируем параметры для запроса
+    params = {
         "apikey": "40d1649f-0493-4b70-98ba-98533de7710b",
         "format": "json",
         "geocode": city
-    })
+    }
+    # формируем запрос
+    response = requests.get(geocoder_url, params=params)
+    # в формате json
     toponym = response.json()["response"]["GeoObjectCollection"][
         "featureMember"][0]["GeoObject"]
+    # возвращаем координаты места
     return toponym["Point"]["pos"].split()
 
 
+# функция для получения места(города)
 def geocoder(update, context):
+    # выбираем слово из команды пользователя
     city = update.message.text[9:]
+    # получаем координаты места
+    # с помощью функции get_ll
     ll = get_ll(city)
-    # Можно воспользоваться готовой функцией,
-    # которую предлагалось сделать на уроках, посвящённых HTTP-геокодеру.
-
+    # формируем запрос
     static_api_request = f"http://static-maps.yandex.ru/1.x/?ll={ll[0]},{ll[1]}&spn=0.5,0.5&l=map"
     context.bot.send_photo(
         update.message.chat_id,  # Идентификатор чата. Куда посылать картинку.
@@ -189,28 +229,48 @@ def geocoder(update, context):
     )
 
 
-def weather(update, context):
+def get_id_city(update, city):
     try:
-        city = update.message.text[8:]
-        update.message.reply_text(f'Ищу погоду в городе {city}')
+        # выбираем слово из команды пользователя
+        # получаем id города, который запросил пользователь
+        # формируем параметры для запроса
         params = {
             'q': city,
             'units': 'metric',
             'lang': 'ru',
             'APPID': 'dc3fe5fca29d8fd2decc5bc2118aeab4'
         }
+        # формируем запрос
         res = requests.get("http://api.openweathermap.org/data/2.5/find", params)
+        # в запросе json
         data = res.json()
+        # в city_id -  id города
         city_id = data['list'][0]['id']
+        return city_id
+    except BaseException as e:
+        print(e)
+        update.message.reply_text("Неизвестная ошибка! Проверьте написание города!")
+
+
+# функция для получения погоды в городе
+def weather(update, context):
+    try:
+        # выбираем слово из команды пользователя
+        city = update.message.text[8:]
+        update.message.reply_text(f'Ищу погоду в городе {city}')
+        city_id = get_id_city(update, city)
+        # формируем параметры для нового запроса
         new_params = {
             'id': city_id,
             'units': 'metric',
             'lang': 'ru',
             'APPID': 'dc3fe5fca29d8fd2decc5bc2118aeab4'
         }
+        # формируем запрос
         response = requests.get("http://api.openweathermap.org/data/2.5/weather", new_params)
+        # в формате json
         toponym = response.json()
-        print(toponym)
+        # присылаем пользователю результаты
         update.message.reply_text(f"Погода в городе {city}:")
         update.message.reply_text('Описание: {}'.format(toponym['weather'][0]['description']))
         update.message.reply_text('Температура: {}'.format(toponym['main']['temp']))
@@ -221,18 +281,12 @@ def weather(update, context):
         update.message.reply_text("Неизвестная ошибка! Проверьте написание города!")
 
 
+# функция для получения погоды на 5 дней вперёд
 def weather_5(update, context):
+    # выбираем слово из команды пользователя
     city = update.message.text[9:]
     update.message.reply_text(f'Ищу погоду в городе {city}')
-    params = {
-        'q': city,
-        'units': 'metric',
-        'lang': 'ru',
-        'APPID': 'dc3fe5fca29d8fd2decc5bc2118aeab4'
-    }
-    res = requests.get("http://api.openweathermap.org/data/2.5/find", params)
-    data = res.json()
-    city_id = data['list'][0]['id']
+    city_id = get_id_city(update, city)
     new_params = {
         'id': city_id,
         'units': 'metric',
@@ -241,11 +295,13 @@ def weather_5(update, context):
     }
     response = requests.get("http://api.openweathermap.org/data/2.5/forecast", new_params)
     toponym = response.json()
+    print(toponym)
     for i in toponym['list']:
-        update.message.reply_text(i['dt_txt'], '{0:+3.0f}'.format(i['main']['temp']), i['weather'][0]['description'])
+        update.message.reply_text(i['dt_txt'], i[0]['main']['temp'])
 
 
 def main():
+    # параметры для подключения к PROXY серверу
     REQUEST_KWARGS = {
         'proxy_url': 'socks5://96.96.33.133:1080',  # Адрес прокси сервера
         # Опционально, если требуется аутентификация:
@@ -256,18 +312,23 @@ def main():
             'password': 'password'
         }
     }
+
+    # Создаём объект updater
     # Вместо слова "TOKEN" надо разместить полученный от @BotFather токен
     updater = Updater('1243221890:AAHsgSwnGVBr5WwVEuWdT6wsPcVuW32xI3A', use_context=True,
                       request_kwargs=REQUEST_KWARGS)
 
     # Получаем из него диспетчер сообщений.
     dp = updater.dispatcher
+
     # Запускаем цикл приема и обработки сообщений.
     updater.start_polling()
+
+    # сценарий для регистрации пользователя
     conv_handler = ConversationHandler(
         # Точка входа в диалог.
-        # В данном случае — команда /start. Она задаёт первый вопрос.
-        entry_points=[CommandHandler('start', start)],
+        # В данном случае — команда /registration. Она задаёт первый вопрос.
+        entry_points=[CommandHandler('registration', registration)],
 
         # Состояние внутри диалога.
         # Вариант с двумя обработчиками, фильтрующими текстовые сообщения.
@@ -283,10 +344,13 @@ def main():
         fallbacks=[CommandHandler('stop', stop)]
     )
 
+    # зарегистрируем сценарий в диспетчере
     dp.add_handler(conv_handler)
+
+    # зарегистрируем команды в диспетчере
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help))
-    dp.add_handler(CommandHandler('bop', bop))
+    dp.add_handler(CommandHandler('dog_photo', dog_photo))
     dp.add_handler(CommandHandler('registration', registration))
     dp.add_handler(CommandHandler("close", close_keyboard))
     dp.add_handler(CommandHandler("geocoder", geocoder))
@@ -298,6 +362,7 @@ def main():
                                   pass_chat_data=True))
     dp.add_handler(CommandHandler("unset", unset_timer,
                                   pass_chat_data=True))
+
     # Ждём завершения приложения.
     # (например, получения сигнала SIG_TERM при нажатии клавиш Ctrl+C)
     updater.idle()
