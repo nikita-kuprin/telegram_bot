@@ -17,11 +17,22 @@ from data.users import User
 # Импортируем random для генерации случайных чисел
 from random import randint
 
+# Импортируем библиотеку для работы с временем
+import datetime
+
 # Инициализация базы данных
 db_session.global_init("db/blogs.sqlite")
 
 # Создаем пользователя для регистрации и дальнейшего отправления его в базу данных
 user = User()
+
+
+# Функция для записи ошибок в файл
+def error(e):
+    f = open('data/error.txt', 'w')
+    f.write(e)
+    f.write(str(datetime.datetime.now))
+    f.close()
 
 
 # Функция для установки хешированного пароля при регистрации
@@ -30,8 +41,8 @@ def set_password(self, password):
 
 
 # Функция для проверки возраста, введенного пользователем
-# если все проверки завершены - функция отправит  False
-# если не все - функция отправит сообщение о ошибке и True,
+# если проверка завершена - функция отправит  False
+# если не завершена - функция отправит сообщение о ошибке и True,
 # тем самым заставляю вводить пользователя свой возраст ещё раз
 def age_verification(update, age):
     try:
@@ -39,20 +50,20 @@ def age_verification(update, age):
         # ввел ли пользователь число или нет
         # не число вызовет ошибку
         int(age)
-        # вторая проверка на отрицательный возраст
-        if age < 0:
-            update.message.reply_text("Введите неотрицательное число!")
-            return True
         return False
 
     except ValueError:
-        update.message.reply_text("Введите целое число!")
+        update.message.reply_text(
+            "Введите целое число!"
+        )
         return True
 
 
 # начало регистрации пользователя
 def registration(update, context):
-    update.message.reply_text("Какое у Вас имя?")
+    update.message.reply_text(
+        "Какое у Вас имя?"
+    )
     return 1
     # Следующее текстовое сообщение будет обработано
     # обработчиком states[1]
@@ -64,12 +75,19 @@ def start(update, context):
     reply_keyboard = [["/registration"]]
     markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
     # передаем клавиатуру в качестве параметра пользователю
-    update.message.reply_text("Привет! Я бот. Давайте познакомимся поближе. Для этого пройдите анкету",
-                              reply_markup=markup)
+    update.message.reply_text(
+        "Привет! Я бот. Давайте познакомимся поближе. Для этого пройдите анкету, нажав по кнопке нижу",
+        reply_markup=markup
+    )
 
 
 # Команда для получения команд бота
 def help(update, context):
+    # создание клавиатуры
+    reply_keyboard = [["🦮 /dog_photo", "😸 /cat_photo"],
+                      ["🔢 /fact_random_number", "🌿 /fact_cn"]]
+    markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
+    # Выдаем пользователю команды
     update.message.reply_text(
         "Мои команды:"
     )
@@ -93,10 +111,19 @@ def help(update, context):
         '6)🔢 /fact_random_number - получение факта о случайном числе'
     )
     update.message.reply_text(
-        '7)🔢 /fact_my_number <целое число> - получение факта о вашем числе'
+        '7)💯 /fact_my_number <целое число> - получение факта о вашем числе'
+    )
+    update.message.reply_text(
+        '8)🌿 /fact_cn - случайный факт о Чаке Норрисе(для настоящих фанатов!!!)',
+    )
+    # передаем клавиатуру в качестве параметра пользователю
+    update.message.reply_text(
+        'Если клавиатура надоела - закрой её, отправив мне /close',
+        reply_markup=markup
     )
 
 
+# Функция для прекращения регистрации
 def stop(update, context):
     update.message.reply_text(
         "Анкетирование приостановлено. Данные не сохранены."
@@ -111,8 +138,12 @@ def first_answer(update, context):
     # Это ответ на первый вопрос.
     name = update.message.text
     user.name = name
-    update.message.reply_text("Какое красивое имя!")
-    update.message.reply_text("А где Вы живёте?🏙")
+    update.message.reply_text(
+        "Какое красивое имя!"
+    )
+    update.message.reply_text(
+        "А где Вы живёте?🏙"
+    )
     return 2
     # Следующее текстовое сообщение будет обработано
     # обработчиком states[2]
@@ -123,7 +154,9 @@ def second_answer(update, context):
     # Это ответ на второй вопрос.
     city = update.message.text
     user.city = city
-    update.message.reply_text("Сколько Вам лет?")
+    update.message.reply_text(
+        "Сколько Вам лет?"
+    )
     return 3
     # Следующее текстовое сообщение будет обработано
     # обработчиком states[3]
@@ -137,7 +170,9 @@ def third_answer(update, context):
     if flag:
         return 3
     user.age = age
-    update.message.reply_text("Придумайте пароль")
+    update.message.reply_text(
+        "Придумайте пароль"
+    )
     return 4
 
 
@@ -149,7 +184,17 @@ def fourth_answer(update, context):
     user.password = generate_password_hash(password)
     # ставим статус пользователю
     user.status = "normal"
-    update.message.reply_text("Ваши данные сохранены!")
+    update.message.reply_text(
+        "Ваши данные сохранены! Спасибо за участие в анкете 🥰"
+    )
+    # создание клавиатуры
+    reply_keyboard = [["/help"]]
+    markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
+    # передаем клавиатуру в качестве параметра пользователю
+    update.message.reply_text(
+        "Для получения команд отправьте мне /help. Приятного пользования!",
+        reply_markup=markup
+    )
     # подключаемся к базе данных
     session = db_session.create_session()
     # добавляем пользователя в базу данных
@@ -158,6 +203,14 @@ def fourth_answer(update, context):
     session.commit()
     return ConversationHandler.END  # Константа, означающая конец диалога.
     # Все обработчики из states и fallbacks становятся неактивными.
+
+
+# функция для закрытия клавиатуры
+def close(update, context):
+    update.message.reply_text(
+        "Закрыл клавиатуру",
+        reply_markup=ReplyKeyboardRemove()
+    )
 
 
 # функция для получения случайного фото 🦮
@@ -169,15 +222,20 @@ def dog_photo(update, context):
         toponym = responce.json()
         # получаем ссылку на картинку
         photo = toponym["url"]
-        # отсылаем пользователю фотографию
+        # получаем id чата
         chat_id = update.message.chat_id
+        # отправляем фото
         context.bot.send_photo(
             chat_id=chat_id,
             photo=photo
         )
+
     except BaseException as e:
-        print(e)
-        update.message.reply_text("Неизвестная ошибка! Пожалуйста, попробуйте заново!")
+        # в случае ошибки - выдаем соответствующее сообщение пользователю и записываем ошибку в файл
+        error(e)
+        update.message.reply_text(
+            "Неизвестная ошибка! Пожалуйста, попробуйте заново!"
+        )
 
 
 def cat_photo(update, context):
@@ -195,17 +253,11 @@ def cat_photo(update, context):
             photo=photo
         )
     except BaseException as e:
-        print(e)
+        # в случае ошибки - выдаем соответствующее сообщение пользователю и записываем ошибку в файл
+        error(e)
         update.message.reply_text(
             "Неизвестная ошибка! Пожалуйста, попробуйте заново!"
         )
-
-
-def close_keyboard(update, context):
-    update.message.reply_text(
-        "Ok",
-        reply_markup=ReplyKeyboardRemove()
-    )
 
 
 def set_timer(update, context):
@@ -264,21 +316,28 @@ def unset_timer(update, context):
 
 
 # функция для получения координат места(города)
-def get_ll(city):
-    geocoder_url = "http://geocode-maps.yandex.ru/1.x/"
-    # формируем параметры для запроса
-    params = {
-        "apikey": "40d1649f-0493-4b70-98ba-98533de7710b",
-        "format": "json",
-        "geocode": city
-    }
-    # формируем запрос
-    response = requests.get(geocoder_url, params=params)
-    # в формате json
-    toponym = response.json()["response"]["GeoObjectCollection"][
-        "featureMember"][0]["GeoObject"]
-    # возвращаем координаты места
-    return toponym["Point"]["pos"].split()
+def get_ll(update, city):
+    try:
+        geocoder_url = "http://geocode-maps.yandex.ru/1.x/"
+        # формируем параметры для запроса
+        params = {
+            "apikey": "40d1649f-0493-4b70-98ba-98533de7710b",
+            "format": "json",
+            "geocode": city
+        }
+        # формируем запрос
+        response = requests.get(geocoder_url, params=params)
+        # в формате json
+        toponym = response.json()["response"]["GeoObjectCollection"][
+            "featureMember"][0]["GeoObject"]
+        # возвращаем координаты места
+        return toponym["Point"]["pos"].split()
+    except BaseException as e:
+        # в случае ошибки - выдаем соответствующее сообщение пользователю и записываем ошибку в файл
+        error(e)
+        update.message.reply_text(
+            "Неизвестная ошибка! Проверьте написание города!"
+        )
 
 
 # функция для получения места(города)
@@ -288,7 +347,7 @@ def geocoder(update, context):
         city = update.message.text[9:]
         # получаем координаты места
         # с помощью функции get_ll
-        ll = get_ll(city)
+        ll = get_ll(update, city)
         # формируем запрос
         static_api_request = f"http://static-maps.yandex.ru/1.x/?ll={ll[0]},{ll[1]}&spn=0.5,0.5&l=map"
         context.bot.send_photo(
@@ -298,8 +357,10 @@ def geocoder(update, context):
             static_api_request,
             caption=f"Нашёл: {city}"
         )
+
     except BaseException as e:
-        print(e)
+        # в случае ошибки - выдаем соответствующее сообщение пользователю и записываем ошибку в файл
+        error(e)
         update.message.reply_text(
             "Неизвестная ошибка! Проверьте написание города!"
         )
@@ -323,8 +384,10 @@ def get_id_city(update, city):
         # в city_id -  id города
         city_id = data['list'][0]['id']
         return city_id
+
     except BaseException as e:
-        print(e)
+        # в случае ошибки - выдаем соответствующее сообщение пользователю и записываем ошибку в файл
+        error(e)
         update.message.reply_text(
             "Неизвестная ошибка! Проверьте написание города!"
         )
@@ -349,13 +412,25 @@ def weather(update, context):
         # в формате json
         toponym = response.json()
         # присылаем пользователю результаты
-        update.message.reply_text(f"Погода в городе {city}:")
-        update.message.reply_text('Описание: {}'.format(toponym['weather'][0]['description']))
-        update.message.reply_text('Температура: {}'.format(toponym['main']['temp']))
-        update.message.reply_text('Максимальная температура: {}'.format(toponym['main']['temp_max']))
-        update.message.reply_text('Минимальная температура: {}'.format(toponym['main']['temp_min']))
+        update.message.reply_text(
+            f"Погода в городе {city}:"
+        )
+        update.message.reply_text(
+            'Описание: {}'.format(toponym['weather'][0]['description'])
+        )
+        update.message.reply_text(
+            'Температура: {}'.format(toponym['main']['temp'])
+        )
+        update.message.reply_text(
+            'Максимальная температура: {}'.format(toponym['main']['temp_max'])
+        )
+        update.message.reply_text(
+            'Минимальная температура: {}'.format(toponym['main']['temp_min'])
+        )
+
     except BaseException as e:
-        print(e)
+        # в случае ошибки - выдаем соответствующее сообщение пользователю и записываем ошибку в файл
+        error(e)
         update.message.reply_text(
             "Неизвестная ошибка! Проверьте написание города!"
         )
@@ -363,14 +438,18 @@ def weather(update, context):
 
 def fact_random_number(update, context):
     try:
+        # получаем случайное число
         number = randint(1, 1000)
-        print(number)
+        # формируем запрос
         response = requests.get('http://numbersapi.com/{}?json'.format(str(number)))
-        print(response)
+        # в формате json
         toponym = response.json()
+        # выдаем пользователю факт
         update.message.reply_text(toponym['text'])
+
     except BaseException as e:
-        print(e)
+        # в случае ошибки - выдаем соответствующее сообщение пользователю и записываем ошибку в файл
+        error(e)
         update.message.reply_text(
             "Неизвестная ошибка! Повторите попытку ещё раз!"
         )
@@ -378,12 +457,44 @@ def fact_random_number(update, context):
 
 def fact_my_number(update, context):
     try:
+        # получаем число пользователя
         number = update.message.text[16:]
+        # формируем запрос
         response = requests.get('http://numbersapi.com/{}?json'.format(str(number)))
+        # в формате json
         toponym = response.json()
+        # выдаем пользователю факт
         update.message.reply_text(toponym['text'])
+
     except BaseException as e:
-        print(e)
+        # в случае ошибки - выдаем соответствующее сообщение пользователю и записываем ошибку в файл
+        error(e)
+        update.message.reply_text(
+            "Неизвестная ошибка! Повторите попытку ещё раз!"
+        )
+
+
+def fact_cn(update, context):
+    try:
+        # формируем запрос
+        response = requests.get('https://api.chucknorris.io/jokes/random')
+        #в формате json
+        toponym = response.json()
+        # выдаем пользователю факт
+        update.message.reply_text(
+            toponym["value"]
+        )
+        # получаем id чата
+        chat_id = update.message.chat_id
+        # отправляем пользователю
+        context.bot.send_photo(
+            chat_id=chat_id,
+            photo=toponym["icon_url"]
+        )
+
+    except BaseException as e:
+        # в случае ошибки - выдаем соответствующее сообщение пользователю и записываем ошибку в файл
+        error(e)
         update.message.reply_text(
             "Неизвестная ошибка! Повторите попытку ещё раз!"
         )
@@ -442,11 +553,12 @@ def main():
     dp.add_handler(CommandHandler('dog_photo', dog_photo))
     dp.add_handler(CommandHandler("cat_photo", cat_photo))
     dp.add_handler(CommandHandler('registration', registration))
-    dp.add_handler(CommandHandler("close", close_keyboard))
     dp.add_handler(CommandHandler("geocoder", geocoder))
     dp.add_handler(CommandHandler("weather", weather))
     dp.add_handler(CommandHandler("fact_random_number", fact_random_number))
     dp.add_handler(CommandHandler("fact_my_number", fact_my_number))
+    dp.add_handler(CommandHandler("fact_cn", fact_cn))
+    dp.add_handler(CommandHandler("close", close))
     dp.add_handler(CommandHandler("set", set_timer,
                                   pass_args=True,
                                   pass_job_queue=True,
