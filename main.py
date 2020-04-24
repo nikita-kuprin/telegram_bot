@@ -486,7 +486,7 @@ def fact_cn(update, context):
         )
         # получаем id чата
         chat_id = update.message.chat_id
-        # отправляем пользователю
+        # отправляем пользователют
         context.bot.send_photo(
             chat_id=chat_id,
             photo=toponym["icon_url"]
