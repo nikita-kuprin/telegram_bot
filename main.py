@@ -2,7 +2,7 @@
 # Импортируем необходимые классы.
 from telegram.ext import Updater, MessageHandler, Filters
 from telegram.ext import CallbackContext, CommandHandler, ConversationHandler
-from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
+from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 
 # Импортируем необходимую библиотеку для работы с API
 import requests
@@ -14,6 +14,9 @@ from werkzeug.security import generate_password_hash
 from data import db_session
 from data.users import User
 
+# Импортируем random для генерации случайных чисел
+from random import randint
+
 # Инициализация базы данных
 db_session.global_init("db/blogs.sqlite")
 
@@ -21,15 +24,25 @@ db_session.global_init("db/blogs.sqlite")
 user = User()
 
 
-# Функция для установки хешированного пароля
+# Функция для установки хешированного пароля при регистрации
 def set_password(self, password):
     self.hashed_password = generate_password_hash(password)
 
 
 # Функция для проверки возраста, введенного пользователем
+# если все проверки завершены - функция отправит  False
+# если не все - функция отправит сообщение о ошибке и True,
+# тем самым заставляю вводить пользователя свой возраст ещё раз
 def age_verification(update, age):
     try:
+        # первая проверка направлена на то, чтобы проверить
+        # ввел ли пользователь число или нет
+        # не число вызовет ошибку
         int(age)
+        # вторая проверка на отрицательный возраст
+        if age < 0:
+            update.message.reply_text("Введите неотрицательное число!")
+            return True
         return False
 
     except ValueError:
@@ -47,8 +60,10 @@ def registration(update, context):
 
 # Команда для начала общения с ботом
 def start(update, context):
+    # создание клавиатуры
     reply_keyboard = [["/registration"]]
     markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
+    # передаем клавиатуру в качестве параметра пользователю
     update.message.reply_text("Привет! Я бот. Давайте познакомимся поближе. Для этого пройдите анкету",
                               reply_markup=markup)
 
@@ -56,16 +71,30 @@ def start(update, context):
 # Команда для получения команд бота
 def help(update, context):
     update.message.reply_text(
-        "Мои команды:")
+        "Мои команды:"
+    )
     update.message.reply_text(
-        "1) /dog_photo - случайное фото собачки всегда поднимет настроение :3")
+        "1)🦮 /dog_photo - случайное фото собачки всегда поднимет настроение :3"
+    )
     update.message.reply_text(
-        "2) /set <время> - поставить таймер на любое количество секунд,"
-        " чтобы удалить таймер - напиши мне /unset")
+        "2)😸 /cat_photo - случайное фото кота. Тоже приятно"
+    )
     update.message.reply_text(
-        "3) /geocoder <название города> - показать карту местности города")
+        "3)⏰ /set <время> - поставить таймер на любое количество секунд,"
+        " чтобы удалить таймер - напиши мне /unset"
+    )
     update.message.reply_text(
-        "4) /weather <название города транслитом> - показать погоду в вашем городе")
+        "4)🗺 /geocoder <название города> - показать карту местности города"
+    )
+    update.message.reply_text(
+        "5)🌡 /weather <название города транслитом> - показать погоду в вашем городе"
+    )
+    update.message.reply_text(
+        '6)🔢 /fact_random_number - получение факта о случайном числе'
+    )
+    update.message.reply_text(
+        '7)🔢 /fact_my_number <целое число> - получение факта о вашем числе'
+    )
 
 
 def stop(update, context):
@@ -123,23 +152,53 @@ def fourth_answer(update, context):
     update.message.reply_text("Ваши данные сохранены!")
     # подключаемся к базе данных
     session = db_session.create_session()
+    # добавляем пользователя в базу данных
     session.add(user)
+    # коммитим изменения
     session.commit()
     return ConversationHandler.END  # Константа, означающая конец диалога.
     # Все обработчики из states и fallbacks становятся неактивными.
 
 
-# функция для команды /bop
+# функция для получения случайного фото 🦮
 def dog_photo(update, context):
-    # формируем запрос
-    responce = requests.get('https://random.dog/woof.json')
-    # в формате json
-    toponym = responce.json()
-    # получаем ссылку на картинку
-    photo = toponym["url"]
-    # отсылаем пользователю фотографию
-    chat_id = update.message.chat_id
-    context.bot.send_photo(chat_id=chat_id, photo=photo)
+    try:
+        # формируем запрос
+        responce = requests.get('https://random.dog/woof.json')
+        # в формате json
+        toponym = responce.json()
+        # получаем ссылку на картинку
+        photo = toponym["url"]
+        # отсылаем пользователю фотографию
+        chat_id = update.message.chat_id
+        context.bot.send_photo(
+            chat_id=chat_id,
+            photo=photo
+        )
+    except BaseException as e:
+        print(e)
+        update.message.reply_text("Неизвестная ошибка! Пожалуйста, попробуйте заново!")
+
+
+def cat_photo(update, context):
+    try:
+        # формируем запрос
+        responce = requests.get('https://aws.random.cat/meow')
+        # в формате json
+        toponym = responce.json()
+        # получаем ссылку на картинку
+        photo = toponym["file"]
+        # отсылаем пользователю фотографию
+        chat_id = update.message.chat_id
+        context.bot.send_photo(
+            chat_id=chat_id,
+            photo=photo
+        )
+    except BaseException as e:
+        print(e)
+        update.message.reply_text(
+            "Неизвестная ошибка! Пожалуйста, попробуйте заново!"
+        )
 
 
 def close_keyboard(update, context):
@@ -157,7 +216,8 @@ def set_timer(update, context):
         due = int(context.args[0])
         if due < 0:
             update.message.reply_text(
-                'Извините, не умеем возвращаться в прошлое')
+                'Извините, не умеем возвращаться в прошлое'
+            )
             return
 
         # Добавляем задачу в очередь
@@ -169,28 +229,38 @@ def set_timer(update, context):
         # Запоминаем созданную задачу в данных чата.
         context.chat_data['job'] = new_job
         # Присылаем сообщение о том, что всё получилось.
-        update.message.reply_text('Вернусь через {} секунд'.format(due))
+        update.message.reply_text(
+            'Вернусь через {} секунд'.format(due)
+        )
 
     except (IndexError, ValueError):
-        update.message.reply_text('Использование: /set <секунд>')
+        update.message.reply_text(
+            'Использование: /set <секунд>'
+        )
 
 
 def task(context):
     job = context.job
-    context.bot.send_message(job.context, text='Вернулся!')
+    context.bot.send_message(
+        job.context, text='Вернулся!'
+    )
 
 
 def unset_timer(update, context):
     # Проверяем, что задача ставилась
     if 'job' not in context.chat_data:
-        update.message.reply_text('Нет активного таймера')
+        update.message.reply_text(
+            'Нет активного таймера'
+        )
         return
     job = context.chat_data['job']
     # планируем удаление задачи (выполнится, когда будет возможность)
     job.schedule_removal()
     # и очищаем пользовательские данные
     del context.chat_data['job']
-    update.message.reply_text('Хорошо, вернулся сейчас!')
+    update.message.reply_text(
+        'Хорошо, вернулся сейчас!'
+    )
 
 
 # функция для получения координат места(города)
@@ -213,20 +283,26 @@ def get_ll(city):
 
 # функция для получения места(города)
 def geocoder(update, context):
-    # выбираем слово из команды пользователя
-    city = update.message.text[9:]
-    # получаем координаты места
-    # с помощью функции get_ll
-    ll = get_ll(city)
-    # формируем запрос
-    static_api_request = f"http://static-maps.yandex.ru/1.x/?ll={ll[0]},{ll[1]}&spn=0.5,0.5&l=map"
-    context.bot.send_photo(
-        update.message.chat_id,  # Идентификатор чата. Куда посылать картинку.
-        # Ссылка на static API, по сути, ссылка на картинку.
-        # Телеграму можно передать прямо её, не скачивая предварительно карту.
-        static_api_request,
-        caption=f"Нашёл: {city}"
-    )
+    try:
+        # выбираем слово из команды пользователя
+        city = update.message.text[9:]
+        # получаем координаты места
+        # с помощью функции get_ll
+        ll = get_ll(city)
+        # формируем запрос
+        static_api_request = f"http://static-maps.yandex.ru/1.x/?ll={ll[0]},{ll[1]}&spn=0.5,0.5&l=map"
+        context.bot.send_photo(
+            update.message.chat_id,  # Идентификатор чата. Куда посылать картинку.
+            # Ссылка на static API, по сути, ссылка на картинку.
+            # Телеграму можно передать прямо её, не скачивая предварительно карту.
+            static_api_request,
+            caption=f"Нашёл: {city}"
+        )
+    except BaseException as e:
+        print(e)
+        update.message.reply_text(
+            "Неизвестная ошибка! Проверьте написание города!"
+        )
 
 
 def get_id_city(update, city):
@@ -249,7 +325,9 @@ def get_id_city(update, city):
         return city_id
     except BaseException as e:
         print(e)
-        update.message.reply_text("Неизвестная ошибка! Проверьте написание города!")
+        update.message.reply_text(
+            "Неизвестная ошибка! Проверьте написание города!"
+        )
 
 
 # функция для получения погоды в городе
@@ -278,26 +356,37 @@ def weather(update, context):
         update.message.reply_text('Минимальная температура: {}'.format(toponym['main']['temp_min']))
     except BaseException as e:
         print(e)
-        update.message.reply_text("Неизвестная ошибка! Проверьте написание города!")
+        update.message.reply_text(
+            "Неизвестная ошибка! Проверьте написание города!"
+        )
 
 
-# функция для получения погоды на 5 дней вперёд
-def weather_5(update, context):
-    # выбираем слово из команды пользователя
-    city = update.message.text[9:]
-    update.message.reply_text(f'Ищу погоду в городе {city}')
-    city_id = get_id_city(update, city)
-    new_params = {
-        'id': city_id,
-        'units': 'metric',
-        'lang': 'ru',
-        'APPID': 'dc3fe5fca29d8fd2decc5bc2118aeab4'
-    }
-    response = requests.get("http://api.openweathermap.org/data/2.5/forecast", new_params)
-    toponym = response.json()
-    print(toponym)
-    for i in toponym['list']:
-        update.message.reply_text(i['dt_txt'], i[0]['main']['temp'])
+def fact_random_number(update, context):
+    try:
+        number = randint(1, 1000)
+        print(number)
+        response = requests.get('http://numbersapi.com/{}?json'.format(str(number)))
+        print(response)
+        toponym = response.json()
+        update.message.reply_text(toponym['text'])
+    except BaseException as e:
+        print(e)
+        update.message.reply_text(
+            "Неизвестная ошибка! Повторите попытку ещё раз!"
+        )
+
+
+def fact_my_number(update, context):
+    try:
+        number = update.message.text[16:]
+        response = requests.get('http://numbersapi.com/{}?json'.format(str(number)))
+        toponym = response.json()
+        update.message.reply_text(toponym['text'])
+    except BaseException as e:
+        print(e)
+        update.message.reply_text(
+            "Неизвестная ошибка! Повторите попытку ещё раз!"
+        )
 
 
 def main():
@@ -351,11 +440,13 @@ def main():
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help))
     dp.add_handler(CommandHandler('dog_photo', dog_photo))
+    dp.add_handler(CommandHandler("cat_photo", cat_photo))
     dp.add_handler(CommandHandler('registration', registration))
     dp.add_handler(CommandHandler("close", close_keyboard))
     dp.add_handler(CommandHandler("geocoder", geocoder))
     dp.add_handler(CommandHandler("weather", weather))
-    dp.add_handler(CommandHandler("weather2", weather_5))
+    dp.add_handler(CommandHandler("fact_random_number", fact_random_number))
+    dp.add_handler(CommandHandler("fact_my_number", fact_my_number))
     dp.add_handler(CommandHandler("set", set_timer,
                                   pass_args=True,
                                   pass_job_queue=True,
